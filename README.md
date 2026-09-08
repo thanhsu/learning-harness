@@ -52,6 +52,15 @@ pipeline still works offline in fallback mode with no key at all.
 
 ## Quick start (macOS)
 
+**One-click:** clone the repo, then double-click
+[`scripts/install-mac.command`](scripts/install-mac.command) in Finder. It
+installs Homebrew, Node 20, Python, BlackHole, all dependencies (including the
+live-capture bridge), asks for your Gemini key, starts the app, and opens the
+dashboard. Re-run it any time — completed steps are skipped. Afterwards, use
+[`scripts/start-mac.command`](scripts/start-mac.command) for daily launches.
+
+Or manually:
+
 ```bash
 git clone https://github.com/<your-username>/learning-harness.git
 cd learning-harness

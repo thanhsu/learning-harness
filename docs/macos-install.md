@@ -2,6 +2,28 @@
 
 Tested target: MacBook Air M5, macOS 15+. Everything runs natively on Apple Silicon — no Rosetta, no Ollama, no local LLM downloads.
 
+## Option A — one-click installer (recommended)
+
+```bash
+git clone https://github.com/thanhsu/learning-harness.git
+cd learning-harness
+```
+
+Then **double-click `scripts/install-mac.command` in Finder** (or run
+`bash scripts/install-mac.command`). It installs, in order: Homebrew → Node 20
+→ Python 3 → BlackHole (Zoom audio capture) → npm packages → the Whisper
+bridge's Python venv → creates `.env` and asks for your free Gemini key →
+starts the server and opens <http://localhost:3456>. Every step is skipped if
+already satisfied, so it doubles as a repair tool.
+
+> If macOS blocks the double-click ("unidentified developer" — happens when the
+> repo was downloaded as a ZIP), right-click the file → Open, or run it with
+> `bash scripts/install-mac.command`.
+
+For daily use afterwards, double-click `scripts/start-mac.command`.
+
+## Option B — manual install
+
 ## 1. Install Node.js 20+
 
 Using Homebrew:

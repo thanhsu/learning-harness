@@ -3,6 +3,8 @@ import {
   spawnSync,
   type ChildProcessWithoutNullStreams,
 } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export interface CaptureEvent {
@@ -26,11 +28,15 @@ export interface CaptureStartOptions {
 
 export const CAPTURE_MODELS = ['tiny', 'base', 'small', 'medium'];
 
-const SCRIPT_PATH = fileURLToPath(
-  new URL('../../tools/live_capture.py', import.meta.url)
-);
-const REQUIREMENTS_PATH = fileURLToPath(
-  new URL('../../tools/requirements.txt', import.meta.url)
+const REPO_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const SCRIPT_PATH = path.join(REPO_ROOT, 'tools', 'live_capture.py');
+const REQUIREMENTS_PATH = path.join(REPO_ROOT, 'tools', 'requirements.txt');
+const VENV_DIR = path.join(REPO_ROOT, '.venv');
+// Project virtualenv, preferred when present. Keeps macOS happy (Homebrew
+// Python refuses global pip installs, PEP 668) and isolates deps everywhere.
+const VENV_PYTHON = path.join(
+  VENV_DIR,
+  ...(process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python'])
 );
 const SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
@@ -78,6 +84,11 @@ export class CaptureManager {
   }
 
   findPython(): string | null {
+    // The project venv always wins (it holds the bridge's dependencies).
+    if (fs.existsSync(VENV_PYTHON)) {
+      this.pythonCmd = VENV_PYTHON;
+      return VENV_PYTHON;
+    }
     if (this.pythonCmd !== undefined) return this.pythonCmd;
     const candidates =
       process.platform === 'win32'
@@ -156,7 +167,10 @@ export class CaptureManager {
     };
   }
 
-  /** Kicks off `pip install -r tools/requirements.txt`; UI polls status. */
+  /**
+   * Installs the bridge's Python dependencies into the project virtualenv
+   * (creating .venv first when needed); the UI polls status while it runs.
+   */
   installDeps(): { started: boolean; error?: string } {
     if (this.installing) return { started: false, error: 'Install already running.' };
     const python = this.findPython();
@@ -164,10 +178,9 @@ export class CaptureManager {
 
     this.installing = true;
     this.installExitCode = undefined;
-    this.installLog = ['$ pip install -r tools/requirements.txt'];
+    this.installLog = [];
 
-    const child = spawn(python, ['-m', 'pip', 'install', '-r', REQUIREMENTS_PATH]);
-    const append = (d: Buffer) => {
+    const appendTo = (d: Buffer) => {
       for (const line of d.toString('utf8').split(/\r?\n/)) {
         if (line.trim()) this.installLog.push(line.trim());
       }
@@ -175,19 +188,50 @@ export class CaptureManager {
         this.installLog = this.installLog.slice(-50);
       }
     };
-    child.stdout.on('data', append);
-    child.stderr.on('data', append);
-    child.on('close', (code) => {
+
+    const runStep = (
+      label: string,
+      cmd: string,
+      args: string[],
+      onDone: (code: number) => void
+    ) => {
+      this.installLog.push(`$ ${label}`);
+      const child = spawn(cmd, args);
+      child.stdout.on('data', appendTo);
+      child.stderr.on('data', appendTo);
+      child.on('close', (code) => onDone(code ?? -1));
+      child.on('error', (err) => {
+        this.installLog.push(`spawn failed: ${err.message}`);
+        onDone(-1);
+      });
+    };
+
+    const finish = (code: number) => {
       this.installing = false;
-      this.installExitCode = code ?? -1;
+      this.installExitCode = code;
+      this.pythonCmd = undefined; // re-probe: the venv may exist now
       this.depsReady = undefined; // force a fresh --check
       if (code === 0) void this.checkDeps();
-    });
-    child.on('error', (err) => {
-      this.installing = false;
-      this.installExitCode = -1;
-      this.installLog.push(`spawn failed: ${err.message}`);
-    });
+    };
+
+    const pipInstall = () =>
+      runStep(
+        'pip install -r tools/requirements.txt',
+        VENV_PYTHON,
+        ['-m', 'pip', 'install', '-r', REQUIREMENTS_PATH],
+        finish
+      );
+
+    if (fs.existsSync(VENV_PYTHON)) {
+      pipInstall();
+    } else {
+      runStep(
+        'python -m venv .venv',
+        python,
+        ['-m', 'venv', VENV_DIR],
+        (code) => (code === 0 ? pipInstall() : finish(code))
+      );
+    }
     return { started: true };
   }
 

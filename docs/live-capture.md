@@ -13,14 +13,21 @@ Audio never leaves your machine — Whisper runs locally
 is sent to `localhost`. The only cloud calls remain the quota-guarded Gemini
 summaries.
 
-## One-time setup (from the UI)
+## One-time setup
+
+**macOS:** the one-click installer does everything (Python, BlackHole, the
+bridge's venv) — double-click `scripts/install-mac.command`. See
+[macos-install.md](macos-install.md).
+
+**Windows (or manual) — from the UI:**
 
 1. Install **Python 3.9+**
    - Windows: `winget install Python.Python.3.12` (or python.org)
    - macOS: `brew install python`
 2. Open the dashboard → **Live capture** panel → click **Install dependencies**.
-   This runs `pip install -r tools/requirements.txt`
-   (numpy, soundcard, faster-whisper — roughly 200 MB one-time).
+   This creates a project virtualenv (`.venv/`) and installs
+   `tools/requirements.txt` into it (numpy, soundcard, faster-whisper —
+   roughly 200 MB one-time).
 3. The panel switches to **Ready** when done.
 
 ## Capturing a meeting
