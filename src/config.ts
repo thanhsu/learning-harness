@@ -21,6 +21,7 @@ export interface Config {
  * While PAID_AI_DISABLED=true, only these models may be used.
  */
 const FREE_TIER_MODELS = [
+  'gemini-3.6-flash',
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-2.0-flash',
