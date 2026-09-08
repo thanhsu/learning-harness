@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>learning-harness</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>learning-harness</h1>
+    <div id="status" class="pills">
+      <span class="pill" id="pill-ai">AI: …</span>
+      <span class="pill" id="pill-quota">Quota: …</span>
+      <span class="pill" id="pill-vault">Vault: …</span>
+    </div>
+  </header>
+
+  <div id="toast" hidden></div>
+
+  <main>
+    <section class="col">
+      <h2>Live sessions</h2>
+      <ul id="session-list" class="list"><li class="muted">No active sessions.</li></ul>
+
+      <div id="session-detail" hidden>
+        <h3 id="session-title"></h3>
+        <div class="session-actions">
+          <button id="btn-end">End session &amp; generate note</button>
+        </div>
+        <h4>Rolling summary</h4>
+        <div id="session-summary" class="box md">–</div>
+        <h4>Live transcript</h4>
+        <pre id="session-transcript" class="box"></pre>
+      </div>
+
+      <h2>Paste a transcript</h2>
+      <form id="ingest-form">
+        <input id="ingest-name" type="text" placeholder="filename (e.g. lecture.vtt) — optional" />
+        <textarea id="ingest-text" rows="8" placeholder="Paste transcript text (TXT / VTT / SRT)…" required></textarea>
+        <button type="submit">Generate note</button>
+      </form>
+    </section>
+
+    <section class="col">
+      <h2>Notes vault</h2>
+      <ul id="note-list" class="list"><li class="muted">No notes yet.</li></ul>
+      <pre id="note-view" class="box" hidden></pre>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

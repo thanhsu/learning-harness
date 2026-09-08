@@ -1,0 +1,10 @@
+00:00:02	Dr. Lam:	Welcome everyone, today's session is a quick introduction to cellular respiration.
+00:00:15	Dr. Lam:	Cellular respiration is how cells break down glucose to produce ATP, the energy currency of the cell.
+00:00:34	Dr. Lam:	There are three main stages: glycolysis, the Krebs cycle, and the electron transport chain.
+00:00:58	Dr. Lam:	Glycolysis happens in the cytoplasm and splits one glucose molecule into two pyruvate molecules, producing a net gain of two ATP.
+00:01:25	Minh:	Does glycolysis need oxygen?
+00:01:31	Dr. Lam:	No — glycolysis is anaerobic. Oxygen is only required later, in the electron transport chain.
+00:01:52	Dr. Lam:	The Krebs cycle runs in the mitochondrial matrix and produces electron carriers: NADH and FADH2.
+00:02:20	Dr. Lam:	Finally, the electron transport chain in the inner mitochondrial membrane uses those carriers to produce around 34 ATP per glucose.
+00:02:47	Dr. Lam:	Compare that with fermentation, which only yields two ATP — that's why aerobic respiration is so much more efficient.
+00:03:05	Dr. Lam:	Homework: draw the full pathway from glucose to ATP and label where each stage happens. Due Thursday.
