@@ -33,6 +33,17 @@ export type Summarizer = (
   previousSummary: string
 ) => Promise<string>;
 
+export type LiveEventType = 'chunk' | 'summary' | 'ended' | 'reset';
+
+export interface LiveEvent {
+  type: LiveEventType;
+  session: LiveSessionInfo;
+  /** The transcript line just appended (chunk events only). */
+  line?: string;
+}
+
+export type LiveEventListener = (event: LiveEvent) => void;
+
 interface SessionState extends LiveSessionInfo {
   pendingText: string[];
   chunksSinceSummary: number;
@@ -60,9 +71,26 @@ export interface LiveSessionStoreOptions {
  */
 export class LiveSessionStore {
   private readonly sessions = new Map<string, SessionState>();
+  private readonly listeners = new Set<LiveEventListener>();
 
   constructor(private readonly opts: LiveSessionStoreOptions) {
     fs.mkdirSync(opts.dir, { recursive: true });
+  }
+
+  /** Subscribes to live events (used by the SSE stream); returns unsubscribe. */
+  onEvent(listener: LiveEventListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private emit(event: LiveEvent): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(event);
+      } catch {
+        /* a broken subscriber must not break ingestion */
+      }
+    }
   }
 
   private now(): Date {
@@ -111,7 +139,11 @@ export class LiveSessionStore {
     session.chunksSinceSummary++;
     session.pendingText.push(speaker ? `${speaker}: ${text}` : text);
 
+    // Notify subscribers (SSE) immediately — before the (slow) summarization.
+    this.emit({ type: 'chunk', session: toInfo(session), line: line.trimEnd() });
+
     const summaryUpdated = await this.maybeSummarize(session);
+    if (summaryUpdated) this.emit({ type: 'summary', session: toInfo(session) });
     return { session: toInfo(session), summaryUpdated };
   }
 
@@ -188,7 +220,10 @@ export class LiveSessionStore {
   end(id: string): LiveSessionInfo {
     const s = this.sessions.get(id);
     if (!s) throw new InvalidChunkError(`Unknown session "${id}".`);
-    if (!s.endedAt) s.endedAt = this.now().toISOString();
+    if (!s.endedAt) {
+      s.endedAt = this.now().toISOString();
+      this.emit({ type: 'ended', session: toInfo(s) });
+    }
     return toInfo(s);
   }
 
@@ -198,6 +233,7 @@ export class LiveSessionStore {
     if (!s) throw new InvalidChunkError(`Unknown session "${id}".`);
     this.sessions.delete(id);
     if (fs.existsSync(s.transcriptPath)) fs.rmSync(s.transcriptPath);
+    this.emit({ type: 'reset', session: toInfo(s) });
   }
 }
 

@@ -121,6 +121,25 @@ describe('LiveSessionStore', () => {
     ]);
   });
 
+  it('emits chunk and summary events to subscribers', async () => {
+    const received: Array<{ type: string; id: string; line?: string }> = [];
+    const off = store.onEvent((ev) =>
+      received.push({ type: ev.type, id: ev.session.id, line: ev.line })
+    );
+
+    await store.appendChunk({ sessionId: 's1', speaker: 'A', text: 'one' });
+    await store.appendChunk({ sessionId: 's1', text: 'two' });
+    await store.appendChunk({ sessionId: 's1', text: 'three' }); // triggers summary
+
+    expect(received.filter((e) => e.type === 'chunk')).toHaveLength(3);
+    expect(received[0].line).toContain('A: one');
+    expect(received.some((e) => e.type === 'summary')).toBe(true);
+
+    off();
+    await store.appendChunk({ sessionId: 's1', text: 'four' });
+    expect(received.filter((e) => e.type === 'chunk')).toHaveLength(3);
+  });
+
   it('reset deletes the transcript and frees the id for reuse', async () => {
     await store.appendChunk({ sessionId: 's1', text: 'hello' });
     store.end('s1');

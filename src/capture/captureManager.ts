@@ -26,6 +26,8 @@ export interface CaptureStartOptions {
   language?: string;
   /** Label attached to every chunk (Whisper cannot tell speakers apart). */
   speaker?: string;
+  /** Seconds of audio per transcription window (smaller = lower latency). */
+  windowSeconds?: number;
 }
 
 export const CAPTURE_MODELS = ['tiny', 'base', 'small', 'medium'];
@@ -264,6 +266,10 @@ export class CaptureManager {
       args.push('--language', opts.language);
     }
     if (opts.speaker?.trim()) args.push('--speaker', opts.speaker.trim());
+    const window = Number(opts.windowSeconds);
+    if (Number.isFinite(window) && window >= 3 && window <= 30) {
+      args.push('--window', String(window));
+    }
 
     this.events = [];
     this.sessionId = opts.sessionId;

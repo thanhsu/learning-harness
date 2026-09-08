@@ -66,6 +66,21 @@ main.tab-page {
 }
 @media (max-width: 900px) { main.tab-page { grid-template-columns: 1fr; } }
 
+.caption {
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, #1b2740, var(--panel));
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 19px;
+  line-height: 1.45;
+  font-weight: 600;
+  min-height: 28px;
+  color: var(--text);
+}
+.caption .speaker { color: var(--accent); margin-right: 8px; }
+.caption.idle { color: var(--muted); font-weight: 400; border-color: var(--border); }
+
 .detail-head {
   display: flex;
   align-items: center;

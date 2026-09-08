@@ -31,6 +31,30 @@ export function createLiveRouter(deps: LiveRouterDeps): Router {
     res.json({ sessions: deps.store.list() });
   });
 
+  // Server-Sent Events: pushes chunk/summary/ended/reset events to the UI the
+  // moment they happen, so captions and the transcript update in real time.
+  router.get('/api/live/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const send = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+    send('hello', { sessions: deps.store.list() });
+
+    const unsubscribe = deps.store.onEvent((ev) => {
+      send(ev.type, { session: ev.session, line: ev.line });
+    });
+    const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 25_000);
+
+    req.on('close', () => {
+      unsubscribe();
+      clearInterval(keepAlive);
+    });
+  });
+
   router.get('/api/live/sessions/:id', (req, res) => {
     const session = deps.store.get(req.params.id);
     if (!session) {

@@ -48,6 +48,11 @@
           </div>
           <div class="row">
             <input id="capture-speaker" type="text" placeholder="speaker label (optional)" title="Name attached to every chunk, e.g. the lecturer" />
+            <select id="capture-window" title="Latency vs accuracy: seconds of audio per transcription">
+              <option value="4">fast (4s)</option>
+              <option value="6" selected>balanced (6s)</option>
+              <option value="10">accurate (10s)</option>
+            </select>
           </div>
           <div class="row">
             <select id="capture-device" title="audio device"><option value="">Auto device (system audio)</option></select>
@@ -75,6 +80,7 @@
             <button id="btn-reset" class="danger" title="Delete this session's transcript and free the id">Reset</button>
           </div>
         </div>
+        <div id="caption-bar" class="caption idle">Waiting for speech…</div>
         <h4>Rolling summary</h4>
         <div id="session-summary" class="box md">–</div>
         <h4>Live transcript</h4>

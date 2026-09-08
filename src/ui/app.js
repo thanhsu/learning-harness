@@ -95,6 +95,11 @@ async function loadSessionDetail() {
       (session.summaryError
         ? `Summary unavailable: ${session.summaryError}`
         : 'No rolling summary yet.');
+    if (session.endedAt) {
+      const bar = $('caption-bar');
+      bar.classList.add('idle');
+      bar.textContent = 'Session ended.';
+    }
     const pre = $('session-transcript');
     const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
     pre.textContent = transcript || '(empty)';
@@ -220,6 +225,77 @@ $('ingest-form').onsubmit = async (e) => {
   }
 };
 
+/* ── Realtime stream (SSE): captions + transcript push ──── */
+
+function setCaption(line) {
+  const bar = $('caption-bar');
+  // line format: "[timestamp] Speaker: text" or "[timestamp] text"
+  const m = line.match(/^\[[^\]]*\]\s*(?:([^:]{1,60}):\s+)?(.*)$/);
+  const speaker = m && m[1] ? m[1] : '';
+  const text = m ? m[2] : line;
+  bar.classList.remove('idle');
+  bar.innerHTML = '';
+  if (speaker) {
+    const s = document.createElement('span');
+    s.className = 'speaker';
+    s.textContent = speaker + ':';
+    bar.appendChild(s);
+  }
+  bar.appendChild(document.createTextNode(text));
+}
+
+function connectStream() {
+  const es = new EventSource('/api/live/stream');
+
+  es.addEventListener('chunk', (e) => {
+    const { session, line } = JSON.parse(e.data);
+    // Auto-focus the session receiving audio when nothing is selected.
+    if (!selectedSession) {
+      selectedSession = session.id;
+      loadSessionDetail();
+    }
+    if (session.id !== selectedSession) return;
+    setCaption(line);
+    const pre = $('session-transcript');
+    if (!$('session-detail').hidden) {
+      const atBottom =
+        pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 30;
+      pre.textContent =
+        (pre.textContent === '(empty)' ? '' : pre.textContent) +
+        (pre.textContent && pre.textContent !== '(empty)' ? '\n' : '') +
+        line;
+      if (atBottom) pre.scrollTop = pre.scrollHeight;
+      $('session-title').textContent = `${session.id} (live)`;
+    } else {
+      loadSessionDetail();
+    }
+    loadSessions();
+  });
+
+  es.addEventListener('summary', (e) => {
+    const { session } = JSON.parse(e.data);
+    if (session.id === selectedSession) {
+      $('session-summary').textContent =
+        session.rollingSummary || 'No rolling summary yet.';
+    }
+  });
+
+  es.addEventListener('ended', () => loadSessions());
+  es.addEventListener('reset', (e) => {
+    const { session } = JSON.parse(e.data);
+    if (session.id === selectedSession) {
+      selectedSession = null;
+      $('session-detail').hidden = true;
+      $('session-placeholder').hidden = false;
+    }
+    loadSessions();
+  });
+
+  es.onerror = () => {
+    // Browser auto-reconnects; nothing to do.
+  };
+}
+
 /* ── Live capture (Zoom audio bridge) ───────────────────── */
 
 let devicesLoaded = false;
@@ -336,6 +412,7 @@ $('btn-capture-start').onclick = async () => {
         model: $('capture-model').value,
         language: $('capture-lang').value.trim() || 'auto',
         speaker: $('capture-speaker').value.trim() || undefined,
+        windowSeconds: Number($('capture-window').value) || undefined,
       }),
     });
     toast('Capture started. First start downloads the Whisper model — watch the status line.', true);
@@ -368,3 +445,4 @@ async function refresh() {
 
 refresh();
 setInterval(refresh, 4000);
+connectStream();
