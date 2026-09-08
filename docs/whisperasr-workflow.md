@@ -1,5 +1,11 @@
 # Whisper / WhisperASR Workflow (optional)
 
+> **Easiest path:** learning-harness now ships a built-in live-capture bridge
+> (dashboard → *Live capture* panel) that does audio → Whisper → live chunks
+> automatically on Windows and macOS. See
+> [docs/live-capture.md](live-capture.md). The options below remain for users
+> who prefer their own transcription pipeline.
+
 learning-harness does **not** depend on any speech-to-text engine. It consumes
 transcripts — files dropped into the watch folder, or live chunks POSTed to the
 HTTP API. If your class doesn't provide captions, you can produce transcripts

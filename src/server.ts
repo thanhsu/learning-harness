@@ -6,6 +6,8 @@ import express, {
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { CaptureManager } from './capture/captureManager.js';
+import { createCaptureRouter } from './capture/captureRoutes.js';
 import { loadConfig, type Config } from './config.js';
 import { openDb, type Db } from './db/sqlite.js';
 import { AiUnavailableError, GeminiClient, type AiClient } from './geminiClient.js';
@@ -196,6 +198,10 @@ export function createApp(cfg: Config, db: Db) {
   });
 
   app.use(createLiveRouter({ store, finalize: finalizeSession }));
+
+  // Optional local audio-capture bridge (Zoom system audio -> Whisper -> chunks).
+  const capture = new CaptureManager(`http://localhost:${cfg.port}`);
+  app.use(createCaptureRouter(capture));
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof QuotaExceededError) {

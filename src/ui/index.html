@@ -20,6 +20,38 @@
 
   <main>
     <section class="col">
+      <h2>Live capture — Zoom audio 🎙</h2>
+      <div id="capture-panel" class="box capture">
+        <div id="capture-status-line" class="muted">Checking capture bridge…</div>
+
+        <div id="capture-install-row" hidden>
+          <button id="btn-capture-install">Install dependencies</button>
+          <div id="capture-install-log" class="muted small"></div>
+        </div>
+
+        <div id="capture-controls" hidden>
+          <div class="row">
+            <input id="capture-session" type="text" value="zoom-live" title="session id" />
+            <select id="capture-model" title="Whisper model">
+              <option value="tiny">tiny (fastest)</option>
+              <option value="base" selected>base</option>
+              <option value="small">small (best)</option>
+            </select>
+            <input id="capture-lang" type="text" placeholder="lang: auto" size="8" title='language, e.g. "vi", "en", or auto' />
+          </div>
+          <div class="row">
+            <select id="capture-device" title="audio device"><option value="">Auto device (system audio)</option></select>
+            <button id="btn-capture-devices" type="button" title="Refresh device list">↻</button>
+          </div>
+          <div class="row">
+            <button id="btn-capture-start" type="button">▶ Start capture</button>
+            <button id="btn-capture-stop" type="button" hidden>■ Stop capture</button>
+          </div>
+        </div>
+
+        <div id="capture-last" class="muted small"></div>
+      </div>
+
       <h2>Live sessions</h2>
       <ul id="session-list" class="list"><li class="muted">No active sessions.</li></ul>
 

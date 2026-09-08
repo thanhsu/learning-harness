@@ -18,6 +18,10 @@ pipeline still works offline in fallback mode with no key at all.
 - **Live mode** — accepts live transcript chunks over HTTP
   (`POST /api/live/chunk`), appends them to a per-session transcript file, and
   maintains a rolling summary every N chunks / N minutes.
+- **Live capture** — optional built-in bridge (Python + local faster-whisper)
+  that turns Zoom/system audio into live chunks automatically, installed and
+  controlled from the dashboard. Works on Windows (WASAPI loopback, no extra
+  tools) and macOS (via BlackHole). See [docs/live-capture.md](docs/live-capture.md).
 - **Web dashboard** at `http://localhost:3456` — active sessions, live
   transcript, rolling summary, generated notes, and manual paste/upload.
 - **Markdown vault** (default `~/LearningVault`) — plain files, ready for
@@ -158,6 +162,11 @@ Paste any transcript into the dashboard form (or `POST /api/ingest` with
 | `POST /api/ingest` | Generate a note from pasted transcript text. |
 | `GET /api/notes` | List notes in the vault. |
 | `GET /api/notes/:name` | Fetch one note's Markdown. |
+| `GET /api/capture/status` | Audio-capture bridge status (Python, deps, running). |
+| `GET /api/capture/devices` | List audio input/loopback devices. |
+| `POST /api/capture/install` | Install the bridge's Python dependencies. |
+| `POST /api/capture/start` | Start capturing (`{sessionId, device?, model?, language?}`). |
+| `POST /api/capture/stop` | Stop capturing. |
 
 Errors use JSON with a `code`: `QUOTA_EXCEEDED` (429), `AI_UNAVAILABLE` (503),
 `INVALID_REQUEST` (400).
@@ -188,12 +197,14 @@ learning-harness/
     parsers/               TXT / VTT / SRT / MD → segments
     notes/                 prompts, Markdown renderer, note generator
     live/                  live session store + HTTP routes
+    capture/               audio-capture bridge manager + routes
     watcher/               chokidar folder watcher
     db/                    SQLite schema/state
     ui/                    static dashboard (no build step)
   tests/                   vitest: parsers, quota, markdown, live store
+  tools/                   live_capture.py (audio → Whisper → chunks bridge)
   samples/                 sample.vtt, sample.txt, example-note.md
-  docs/                    macOS install, WhisperASR, NotebookLM guides
+  docs/                    macOS install, live capture, WhisperASR, NotebookLM guides
 ```
 
 The UI is intentionally a static, server-hosted page (vanilla JS) rather than a
