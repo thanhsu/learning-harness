@@ -24,9 +24,18 @@ export class QuotaExceededError extends Error {
 export class QuotaGuard {
   constructor(
     private readonly db: Db,
-    private readonly maxDailyCalls: number,
+    private maxDailyCalls: number,
     private readonly now: () => Date = () => new Date()
   ) {}
+
+  get limit(): number {
+    return this.maxDailyCalls;
+  }
+
+  /** Updates the daily limit at runtime (Settings UI). */
+  setLimit(maxDailyCalls: number): void {
+    this.maxDailyCalls = Math.max(0, Math.floor(maxDailyCalls));
+  }
 
   private today(): string {
     const d = this.now();

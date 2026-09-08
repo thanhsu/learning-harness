@@ -155,6 +155,20 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: 
 .muted { color: var(--muted); }
 button.danger { background: #e05f5f; color: #1a0808; }
 
+.ai-error {
+  margin: 10px 20px 0;
+  padding: 10px 14px;
+  background: #2b1414;
+  border: 1px solid #e05f5f;
+  border-radius: 8px;
+  color: #ff9b9b;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+#settings-form label { margin-top: 6px; }
+#settings-form a { color: var(--accent); }
+
 #toast {
   position: fixed;
   top: 14px;

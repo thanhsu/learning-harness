@@ -11,8 +11,10 @@ for (const btn of document.querySelectorAll('.tab')) {
     for (const b of document.querySelectorAll('.tab')) {
       b.classList.toggle('active', b === btn);
     }
-    $('tab-live').hidden = btn.dataset.tab !== 'live';
-    $('tab-notes').hidden = btn.dataset.tab !== 'notes';
+    for (const page of ['live', 'notes', 'settings']) {
+      $(`tab-${page}`).hidden = btn.dataset.tab !== page;
+    }
+    if (btn.dataset.tab === 'settings') loadSettings();
   };
 }
 
@@ -48,7 +50,91 @@ async function loadStatus() {
   q.className = 'pill ' + (s.quota.remaining === 0 ? 'warn' : '');
 
   $('pill-vault').textContent = `Vault: ${s.vaultDir}`;
+
+  // Persistent banner when the last AI call failed (quota, bad key, 429...).
+  const banner = $('ai-error');
+  if (s.aiLastError) {
+    banner.textContent = `⚠ AI error (${new Date(s.aiLastError.at).toLocaleTimeString()}): ${s.aiLastError.message}`;
+    banner.hidden = false;
+  } else {
+    banner.hidden = true;
+  }
+
+  renderSettingsStatus(s);
 }
+
+function renderSettingsStatus(s) {
+  const box = $('settings-status');
+  if (!box) return;
+  const lines = [
+    `AI: ${s.aiEnabled ? 'enabled' : 'DISABLED — no API key'}`,
+    `Note model: ${s.model}`,
+    `Summary model: ${s.summaryModel}`,
+    `Calls today: ${s.quota.used}/${s.quota.limit} (${s.quota.remaining} left)`,
+    `Free-tier guard: ${s.paidAiDisabled ? 'on (paid models blocked)' : 'OFF'}`,
+    s.aiLastError
+      ? `Last AI error: ${s.aiLastError.message}`
+      : 'Last AI call: OK',
+  ];
+  box.textContent = lines.join('\n');
+}
+
+/* ── Settings ───────────────────────────────────────────── */
+
+async function loadSettings() {
+  try {
+    const s = await api('/api/settings');
+    $('set-key-hint').textContent = s.keySet
+      ? `Current key: ${s.keyHint} (leave blank to keep it)`
+      : 'No key configured — AI features are off.';
+    for (const [selId, current, allowEmpty] of [
+      ['set-model', s.model, false],
+      ['set-summary-model', s.summaryModel, true],
+    ]) {
+      const sel = $(selId);
+      sel.innerHTML = '';
+      if (allowEmpty) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '(same as note model)';
+        sel.appendChild(opt);
+      }
+      for (const m of s.freeTierModels) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        sel.appendChild(opt);
+      }
+      sel.value = current ?? '';
+    }
+    $('set-max').value = s.maxDailyCalls;
+    $('set-lang').value = s.outputLanguage || '';
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+$('settings-form').onsubmit = async (e) => {
+  e.preventDefault();
+  try {
+    await api('/api/settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        apiKey: $('set-key').value.trim() || undefined,
+        model: $('set-model').value,
+        summaryModel: $('set-summary-model').value,
+        maxDailyCalls: Number($('set-max').value),
+        outputLanguage: $('set-lang').value.trim(),
+      }),
+    });
+    $('set-key').value = '';
+    toast('Settings saved.', true);
+    await Promise.all([loadStatus(), loadSettings()]);
+  } catch (err) {
+    toast(err.message);
+  }
+};
 
 /* ── Live sessions ──────────────────────────────────────── */
 

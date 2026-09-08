@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -6,6 +7,8 @@ export interface Config {
   port: number;
   geminiApiKey: string | undefined;
   geminiModel: string;
+  /** Model for rolling summaries ('' = same as geminiModel). */
+  summaryModel: string;
   paidAiDisabled: boolean;
   maxDailyCalls: number;
   watchDir: string;
@@ -22,7 +25,7 @@ export interface Config {
  * Models known to be available on the Google AI Studio free tier.
  * While PAID_AI_DISABLED=true, only these models may be used.
  */
-const FREE_TIER_MODELS = [
+export const FREE_TIER_MODELS = [
   'gemini-3.8-flash',
   'gemini-3.7-flash',
   'gemini-3.6-flash',
@@ -72,6 +75,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: toInt(env.PORT, 3456),
     geminiApiKey: env.GEMINI_API_KEY?.trim() || undefined,
     geminiModel: env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
+    summaryModel: env.GEMINI_SUMMARY_MODEL?.trim() || '',
     paidAiDisabled: toBool(env.PAID_AI_DISABLED, true),
     maxDailyCalls: toNonNegInt(env.MAX_DAILY_CALLS, 20),
     watchDir: expandHome(env.WATCH_DIR?.trim() || '~/Documents/Zoom'),
@@ -82,4 +86,26 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     watchDisabled: toBool(env.WATCH_DISABLED, false),
     outputLanguage: env.OUTPUT_LANGUAGE?.trim() || '',
   };
+}
+
+/**
+ * Upserts KEY=value lines in a .env file (creating the file when missing),
+ * preserving unrelated lines and comments. Used by the Settings UI.
+ */
+export function updateEnvFile(
+  envPath: string,
+  updates: Record<string, string>
+): void {
+  let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+  for (const [key, value] of Object.entries(updates)) {
+    const line = `${key}=${value}`;
+    const re = new RegExp(`^${key}=.*$`, 'm');
+    if (re.test(content)) {
+      content = content.replace(re, line);
+    } else {
+      if (content && !content.endsWith('\n')) content += '\n';
+      content += `${line}\n`;
+    }
+  }
+  fs.writeFileSync(envPath, content, 'utf8');
 }

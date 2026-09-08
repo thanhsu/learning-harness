@@ -9,11 +9,23 @@ export class AiUnavailableError extends Error {
   }
 }
 
+export interface AiError {
+  message: string;
+  at: string;
+}
+
+export interface GenerateOptions {
+  /** Override the default model for this call (e.g. a flash-lite model). */
+  model?: string;
+}
+
 export interface AiClient {
   readonly available: boolean;
   readonly model: string;
-  generate(prompt: string): Promise<string>;
-  generateJson<T>(prompt: string): Promise<T>;
+  /** Most recent AI failure, cleared by the next successful call. */
+  readonly lastError: AiError | null;
+  generate(prompt: string, opts?: GenerateOptions): Promise<string>;
+  generateJson<T>(prompt: string, opts?: GenerateOptions): Promise<T>;
 }
 
 interface GeminiResponse {
@@ -25,6 +37,8 @@ interface GeminiResponse {
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 export class GeminiClient implements AiClient {
+  private _lastError: AiError | null = null;
+
   constructor(
     private readonly cfg: Pick<
       Config,
@@ -42,25 +56,48 @@ export class GeminiClient implements AiClient {
     return Boolean(this.cfg.geminiApiKey);
   }
 
-  async generate(prompt: string): Promise<string> {
+  get lastError(): AiError | null {
+    return this._lastError;
+  }
+
+  async generate(prompt: string, opts?: GenerateOptions): Promise<string> {
+    try {
+      const text = await this.doGenerate(prompt, opts);
+      this._lastError = null;
+      return text;
+    } catch (err) {
+      this._lastError = {
+        message: err instanceof Error ? err.message : String(err),
+        at: new Date().toISOString(),
+      };
+      throw err;
+    }
+  }
+
+  private async doGenerate(
+    prompt: string,
+    opts?: GenerateOptions
+  ): Promise<string> {
+    const model = opts?.model?.trim() || this.cfg.geminiModel;
+
     if (!this.cfg.geminiApiKey) {
       throw new AiUnavailableError(
-        'GEMINI_API_KEY is not set. Add it to .env (get a free key at ' +
-          'https://aistudio.google.com/apikey) to enable AI features.'
+        'GEMINI_API_KEY is not set. Add it in Settings or .env (get a free key ' +
+          'at https://aistudio.google.com/apikey) to enable AI features.'
       );
     }
-    if (this.cfg.paidAiDisabled && !isFreeTierModel(this.cfg.geminiModel)) {
+    if (this.cfg.paidAiDisabled && !isFreeTierModel(model)) {
       throw new AiUnavailableError(
-        `PAID_AI_DISABLED=true blocks model "${this.cfg.geminiModel}" because it is not ` +
-          `on the known free-tier list. Set GEMINI_MODEL to a free-tier model such as ` +
-          `gemini-2.5-flash, or explicitly set PAID_AI_DISABLED=false to accept paid usage.`
+        `PAID_AI_DISABLED=true blocks model "${model}" because it is not ` +
+          `on the known free-tier list. Pick a free-tier model such as ` +
+          `gemini-3.8-flash, or explicitly set PAID_AI_DISABLED=false to accept paid usage.`
       );
     }
 
     // Throws QuotaExceededError with a clear message when the daily cap is hit.
     this.quota.assertCanCall();
 
-    const url = `${API_BASE}/models/${encodeURIComponent(this.cfg.geminiModel)}:generateContent`;
+    const url = `${API_BASE}/models/${encodeURIComponent(model)}:generateContent`;
     const res = await this.fetchImpl(url, {
       method: 'POST',
       headers: {
@@ -73,8 +110,21 @@ export class GeminiClient implements AiClient {
     });
 
     if (!res.ok) {
-      const body = (await res.text()).slice(0, 500);
-      throw new Error(`Gemini API error ${res.status}: ${body}`);
+      const body = (await res.text()).slice(0, 400);
+      if (res.status === 429) {
+        throw new Error(
+          `Google free-tier limit reached for model "${model}" (HTTP 429). ` +
+            `Google resets this daily. Switch to a flash-lite model in Settings ` +
+            `(higher free limits) or wait for the reset. Details: ${body}`
+        );
+      }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(
+          `Gemini rejected the API key (HTTP ${res.status}). Check/update the ` +
+            `key in Settings. Details: ${body}`
+        );
+      }
+      throw new Error(`Gemini API error ${res.status} (model ${model}): ${body}`);
     }
 
     // Only count calls that actually reached the API successfully.
@@ -91,8 +141,8 @@ export class GeminiClient implements AiClient {
     return text;
   }
 
-  async generateJson<T>(prompt: string): Promise<T> {
-    const raw = await this.generate(prompt);
+  async generateJson<T>(prompt: string, opts?: GenerateOptions): Promise<T> {
+    const raw = await this.generate(prompt, opts);
     return extractJson<T>(raw);
   }
 }

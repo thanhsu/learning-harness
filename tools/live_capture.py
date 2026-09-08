@@ -120,32 +120,70 @@ def run(args):
     emit("status", message="Capturing from: %s" % mic.name)
     language = None if args.language in (None, "", "auto") else args.language
 
-    frames = int(SAMPLE_RATE * args.window)
+    def transcribe_and_post(audio):
+        segments, _info = model.transcribe(
+            audio, language=language, vad_filter=True, beam_size=1
+        )
+        text = " ".join(s.text.strip() for s in segments).strip()
+        if len(text) < 2:
+            return
+        try:
+            resp = post_chunk(args.server, args.session, text, args.speaker)
+            emit(
+                "chunk",
+                text=text,
+                chunkCount=(resp.get("session") or {}).get("chunkCount"),
+                summaryUpdated=resp.get("summaryUpdated", False),
+            )
+        except Exception as e:
+            emit("error", message="POST to learning-harness failed: %s" % e)
+
+    # Utterance endpointing: read small blocks and flush a chunk when the
+    # speaker pauses (>= SILENCE_HOLD s of silence) or hits the max window.
+    # This yields complete sentences instead of fixed-size cuts, and captions
+    # appear the moment a sentence ends.
+    BLOCK_SECONDS = 0.3
+    SILENCE_HOLD = 0.7  # trailing silence that ends an utterance
+    MIN_SPEECH = 0.5  # ignore blips shorter than this
+    block_frames = int(SAMPLE_RATE * BLOCK_SECONDS)
+    max_frames = int(SAMPLE_RATE * max(args.window, 3.0))
+
+    buffer = []
+    buffered = 0
+    speech_frames = 0
+    silence_run = 0.0
+
     with mic.recorder(samplerate=SAMPLE_RATE, channels=1) as rec:
         emit("capturing", device=mic.name, model=args.model, session=args.session)
         while True:
-            data = rec.record(numframes=frames)
+            data = rec.record(numframes=block_frames)
             mono = data.mean(axis=1) if data.ndim > 1 else data
             mono = mono.astype("float32")
             rms = float(np.sqrt(np.mean(mono**2)))
-            if rms < SILENCE_RMS:
+            is_speech = rms >= SILENCE_RMS
+
+            if is_speech:
+                buffer.append(mono)
+                buffered += len(mono)
+                speech_frames += len(mono)
+                silence_run = 0.0
+            elif buffer:
+                # Keep a little trailing silence for natural word endings.
+                buffer.append(mono)
+                buffered += len(mono)
+                silence_run += BLOCK_SECONDS
+
+            utterance_ended = buffer and silence_run >= SILENCE_HOLD
+            window_full = buffered >= max_frames
+            if not (utterance_ended or window_full):
                 continue
-            segments, _info = model.transcribe(
-                mono, language=language, vad_filter=True, beam_size=1
-            )
-            text = " ".join(s.text.strip() for s in segments).strip()
-            if len(text) < 2:
-                continue
-            try:
-                resp = post_chunk(args.server, args.session, text, args.speaker)
-                emit(
-                    "chunk",
-                    text=text,
-                    chunkCount=(resp.get("session") or {}).get("chunkCount"),
-                    summaryUpdated=resp.get("summaryUpdated", False),
-                )
-            except Exception as e:
-                emit("error", message="POST to learning-harness failed: %s" % e)
+
+            audio = np.concatenate(buffer)
+            buffer, buffered, silence_run = [], 0, 0.0
+            has_speech = speech_frames >= int(SAMPLE_RATE * MIN_SPEECH)
+            speech_frames = 0
+            if has_speech:
+                transcribe_and_post(audio)
 
 
 def main():
@@ -162,7 +200,12 @@ def main():
     )
     p.add_argument("--server", default="http://localhost:3456")
     p.add_argument("--language", default="auto", help='e.g. "vi", "en", or "auto"')
-    p.add_argument("--window", type=float, default=8.0, help="seconds per chunk")
+    p.add_argument(
+        "--window",
+        type=float,
+        default=10.0,
+        help="max seconds per chunk (utterances usually end sooner, at a pause)",
+    )
     args = p.parse_args()
 
     if args.list_devices:

@@ -13,6 +13,7 @@
       <nav class="tabs">
         <button class="tab active" data-tab="live">Live</button>
         <button class="tab" data-tab="notes">Notes vault</button>
+        <button class="tab" data-tab="settings">⚙ Settings</button>
       </nav>
     </div>
     <div id="status" class="pills">
@@ -23,6 +24,7 @@
   </header>
 
   <div id="toast" hidden></div>
+  <div id="ai-error" class="ai-error" hidden></div>
 
   <!-- ── LIVE TAB ─────────────────────────────────────────── -->
   <main id="tab-live" class="tab-page">
@@ -48,10 +50,10 @@
           </div>
           <div class="row">
             <input id="capture-speaker" type="text" placeholder="speaker label (optional)" title="Name attached to every chunk, e.g. the lecturer" />
-            <select id="capture-window" title="Latency vs accuracy: seconds of audio per transcription">
-              <option value="4">fast (4s)</option>
-              <option value="6" selected>balanced (6s)</option>
-              <option value="10">accurate (10s)</option>
+            <select id="capture-window" title="Chunks end when the speaker pauses; this caps how long one chunk can run">
+              <option value="6">short chunks (max 6s)</option>
+              <option value="10" selected>balanced (max 10s)</option>
+              <option value="15">long sentences (max 15s)</option>
             </select>
           </div>
           <div class="row">
@@ -110,6 +112,38 @@
       </div>
       <pre id="note-view" class="box tall" hidden></pre>
       <div id="note-placeholder" class="muted placeholder">Select a note to read it.</div>
+    </section>
+  </main>
+
+  <!-- ── SETTINGS TAB ─────────────────────────────────────── -->
+  <main id="tab-settings" class="tab-page" hidden>
+    <section class="col side">
+      <h2>AI settings</h2>
+      <form id="settings-form" class="box capture">
+        <label class="small muted" for="set-key">Gemini API key
+          (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">get a free key</a>)</label>
+        <input id="set-key" type="password" placeholder="paste a new key to update" autocomplete="off" />
+        <div id="set-key-hint" class="muted small"></div>
+
+        <label class="small muted" for="set-model">Note model (final note, quiz, flashcards, translation)</label>
+        <select id="set-model"></select>
+
+        <label class="small muted" for="set-summary-model">Rolling-summary model (called often — a flash-lite model saves quota)</label>
+        <select id="set-summary-model"></select>
+
+        <label class="small muted" for="set-max">Max AI calls per day (your own safety cap — Google enforces its free-tier limits separately)</label>
+        <input id="set-max" type="number" min="0" step="1" />
+
+        <label class="small muted" for="set-lang">Output language for notes/summaries (e.g. <code>vi</code>; empty = transcript's language)</label>
+        <input id="set-lang" type="text" placeholder="auto" size="8" />
+
+        <button type="submit">Save settings</button>
+      </form>
+    </section>
+
+    <section class="col grow">
+      <h2>AI status</h2>
+      <div id="settings-status" class="box">Loading…</div>
     </section>
   </main>
 

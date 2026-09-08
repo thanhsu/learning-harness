@@ -8,9 +8,15 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CaptureManager } from './capture/captureManager.js';
 import { createCaptureRouter } from './capture/captureRoutes.js';
-import { loadConfig, type Config } from './config.js';
+import {
+  FREE_TIER_MODELS,
+  isFreeTierModel,
+  loadConfig,
+  updateEnvFile,
+  type Config,
+} from './config.js';
 import { openDb, type Db } from './db/sqlite.js';
-import { AiUnavailableError, GeminiClient, type AiClient } from './geminiClient.js';
+import { AiUnavailableError, GeminiClient } from './geminiClient.js';
 import { createLiveRouter } from './live/liveRoutes.js';
 import {
   InvalidChunkError,
@@ -28,20 +34,19 @@ const NOTE_NAME_RE = /^[\w][\w .()'\-]*\.md$/;
 
 export function createApp(cfg: Config, db: Db) {
   const quota = new QuotaGuard(db, cfg.maxDailyCalls);
-  const gemini: AiClient | null = cfg.geminiApiKey
-    ? new GeminiClient(cfg, quota)
-    : null;
+  // Always constructed: it reads cfg at call time, so a key added later via
+  // the Settings UI takes effect without a restart.
+  const gemini = new GeminiClient(cfg, quota);
 
   const store = new LiveSessionStore({
     dir: path.join(cfg.dataDir, 'sessions'),
     summaryEveryChunks: cfg.summaryEveryChunks,
     summaryEveryMinutes: cfg.summaryEveryMinutes,
-    summarize: gemini
-      ? (newText, prev) =>
-          gemini.generate(
-            rollingSummaryPrompt(prev, newText, cfg.outputLanguage || undefined)
-          )
-      : undefined,
+    summarize: (newText, prev) =>
+      gemini.generate(
+        rollingSummaryPrompt(prev, newText, cfg.outputLanguage || undefined),
+        { model: cfg.summaryModel || undefined }
+      ),
   });
 
   async function finalizeSession(sessionId: string): Promise<{ notePath: string }> {
@@ -128,17 +133,84 @@ export function createApp(cfg: Config, db: Db) {
 
   app.get('/api/status', (_req, res) => {
     res.json({
-      aiEnabled: Boolean(gemini),
+      aiEnabled: gemini.available,
       model: cfg.geminiModel,
+      summaryModel: cfg.summaryModel || cfg.geminiModel,
       paidAiDisabled: cfg.paidAiDisabled,
+      aiLastError: gemini.lastError,
       quota: {
         used: quota.callsToday(),
-        limit: cfg.maxDailyCalls,
+        limit: quota.limit,
         remaining: quota.remaining(),
       },
       watchDir: cfg.watchDir,
       vaultDir: cfg.vaultDir,
     });
+  });
+
+  // ── Settings (editable from the dashboard) ─────────────────────────
+  const envPath = fileURLToPath(new URL('../.env', import.meta.url));
+
+  app.get('/api/settings', (_req, res) => {
+    res.json({
+      keySet: Boolean(cfg.geminiApiKey),
+      keyHint: cfg.geminiApiKey ? `…${cfg.geminiApiKey.slice(-4)}` : null,
+      model: cfg.geminiModel,
+      summaryModel: cfg.summaryModel,
+      maxDailyCalls: quota.limit,
+      outputLanguage: cfg.outputLanguage,
+      freeTierModels: FREE_TIER_MODELS,
+    });
+  });
+
+  app.post('/api/settings', (req, res) => {
+    const { apiKey, model, summaryModel, maxDailyCalls, outputLanguage } =
+      req.body ?? {};
+    const envUpdates: Record<string, string> = {};
+
+    if (typeof apiKey === 'string' && apiKey.trim()) {
+      cfg.geminiApiKey = apiKey.trim();
+      envUpdates.GEMINI_API_KEY = cfg.geminiApiKey;
+    }
+    if (typeof model === 'string' && model.trim()) {
+      const m = model.trim();
+      if (cfg.paidAiDisabled && !isFreeTierModel(m)) {
+        res.status(400).json({
+          error: `"${m}" is not on the free-tier list (PAID_AI_DISABLED=true).`,
+        });
+        return;
+      }
+      cfg.geminiModel = m;
+      envUpdates.GEMINI_MODEL = m;
+    }
+    if (typeof summaryModel === 'string') {
+      const m = summaryModel.trim();
+      if (m && cfg.paidAiDisabled && !isFreeTierModel(m)) {
+        res.status(400).json({
+          error: `"${m}" is not on the free-tier list (PAID_AI_DISABLED=true).`,
+        });
+        return;
+      }
+      cfg.summaryModel = m;
+      envUpdates.GEMINI_SUMMARY_MODEL = m;
+    }
+    if (maxDailyCalls !== undefined) {
+      const n = Number(maxDailyCalls);
+      if (!Number.isFinite(n) || n < 0) {
+        res.status(400).json({ error: 'maxDailyCalls must be a number >= 0.' });
+        return;
+      }
+      cfg.maxDailyCalls = Math.floor(n);
+      quota.setLimit(cfg.maxDailyCalls);
+      envUpdates.MAX_DAILY_CALLS = String(cfg.maxDailyCalls);
+    }
+    if (typeof outputLanguage === 'string') {
+      cfg.outputLanguage = outputLanguage.trim();
+      envUpdates.OUTPUT_LANGUAGE = cfg.outputLanguage;
+    }
+
+    if (Object.keys(envUpdates).length > 0) updateEnvFile(envPath, envUpdates);
+    res.json({ ok: true });
   });
 
   app.get('/api/notes', (_req, res) => {
@@ -180,10 +252,10 @@ export function createApp(cfg: Config, db: Db) {
         res.status(404).json({ error: 'Note not found.' });
         return;
       }
-      if (!gemini) {
+      if (!gemini.available) {
         res.status(503).json({
           error:
-            'Translation needs AI. Set GEMINI_API_KEY in .env to enable it.',
+            'Translation needs AI. Set GEMINI_API_KEY in Settings to enable it.',
           code: 'AI_UNAVAILABLE',
         });
         return;
