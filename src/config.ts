@@ -14,6 +14,8 @@ export interface Config {
   summaryEveryChunks: number;
   summaryEveryMinutes: number;
   watchDisabled: boolean;
+  /** Language for generated notes/summaries ('' = same as the transcript). */
+  outputLanguage: string;
 }
 
 /**
@@ -71,5 +73,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     summaryEveryChunks: toInt(env.SUMMARY_EVERY_CHUNKS, 10),
     summaryEveryMinutes: toInt(env.SUMMARY_EVERY_MINUTES, 5),
     watchDisabled: toBool(env.WATCH_DISABLED, false),
+    outputLanguage: env.OUTPUT_LANGUAGE?.trim() || '',
   };
 }

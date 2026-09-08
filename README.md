@@ -106,6 +106,7 @@ All settings come from environment variables or `.env` (see
 | `SUMMARY_EVERY_CHUNKS` | `10` | Rolling summary refresh: every N chunks… |
 | `SUMMARY_EVERY_MINUTES` | `5` | …or every N minutes, whichever comes first. |
 | `WATCH_DISABLED` | `false` | Set `true` to disable the folder watcher. |
+| `OUTPUT_LANGUAGE` | *(empty)* | Language for notes/summaries (e.g. `vi`). Empty = transcript's own language. |
 
 ### The cost guard, precisely
 
@@ -168,6 +169,8 @@ Paste any transcript into the dashboard form (or `POST /api/ingest` with
 | `GET /api/live/sessions` | List live sessions. |
 | `GET /api/live/sessions/:id` | Session detail + full transcript. |
 | `POST /api/live/sessions/:id/end` | End session and generate the final note. |
+| `POST /api/live/sessions/:id/reset` | Delete a session's transcript and free the id. |
+| `POST /api/notes/:name/translate` | Translate a note (`{language}`, default `vi`) into `<name>.<lang>.md`. |
 | `POST /api/ingest` | Generate a note from pasted transcript text. |
 | `GET /api/notes` | List notes in the vault. |
 | `GET /api/notes/:name` | Fetch one note's Markdown. |

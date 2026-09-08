@@ -21,6 +21,8 @@ export interface GenerateNoteOptions {
   date?: Date;
   /** When set, the note links to this transcript file instead of inlining it. */
   transcriptRef?: string;
+  /** Language for the generated note (e.g. "vi"); default: transcript's own. */
+  outputLanguage?: string;
 }
 
 export interface GenerateNoteResult {
@@ -49,7 +51,11 @@ export async function generateNote(
   if (opts.ai?.available) {
     try {
       const raw = await opts.ai.generateJson<unknown>(
-        notePrompt(transcript, { source: opts.source, date: date.toISOString() })
+        notePrompt(
+          transcript,
+          { source: opts.source, date: date.toISOString() },
+          opts.outputLanguage
+        )
       );
       data = normalizeNoteData(raw, opts.titleHint);
       usedAi = true;

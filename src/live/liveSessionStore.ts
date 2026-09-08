@@ -97,7 +97,7 @@ export class LiveSessionStore {
     const ts =
       typeof chunk.timestamp === 'string' && chunk.timestamp.trim()
         ? chunk.timestamp.trim()
-        : this.now().toISOString();
+        : localTimestamp(this.now());
     const speaker =
       typeof chunk.speaker === 'string' && chunk.speaker.trim()
         ? chunk.speaker.trim()
@@ -191,6 +191,19 @@ export class LiveSessionStore {
     if (!s.endedAt) s.endedAt = this.now().toISOString();
     return toInfo(s);
   }
+
+  /** Removes a session and its transcript file so the id can be reused. */
+  reset(id: string): void {
+    const s = this.sessions.get(id);
+    if (!s) throw new InvalidChunkError(`Unknown session "${id}".`);
+    this.sessions.delete(id);
+    if (fs.existsSync(s.transcriptPath)) fs.rmSync(s.transcriptPath);
+  }
+}
+
+/** "YYYY-MM-DD HH:mm:ss" in the machine's local timezone. */
+export function localTimestamp(d: Date): string {
+  return d.toLocaleString('sv-SE');
 }
 
 // Live transcript lines look like "[<timestamp>] Speaker: text" — the

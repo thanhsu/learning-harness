@@ -4,6 +4,18 @@ const $ = (id) => document.getElementById(id);
 let selectedSession = null;
 let selectedNote = null;
 
+/* ── Tabs ───────────────────────────────────────────────── */
+
+for (const btn of document.querySelectorAll('.tab')) {
+  btn.onclick = () => {
+    for (const b of document.querySelectorAll('.tab')) {
+      b.classList.toggle('active', b === btn);
+    }
+    $('tab-live').hidden = btn.dataset.tab !== 'live';
+    $('tab-notes').hidden = btn.dataset.tab !== 'notes';
+  };
+}
+
 function toast(message, ok = false) {
   const el = $('toast');
   el.textContent = message;
@@ -75,6 +87,7 @@ async function loadSessionDetail() {
       `/api/live/sessions/${encodeURIComponent(selectedSession)}`
     );
     $('session-detail').hidden = false;
+    $('session-placeholder').hidden = true;
     $('session-title').textContent =
       session.id + (session.endedAt ? ' (ended)' : ' (live)');
     $('session-summary').textContent =
@@ -105,6 +118,26 @@ $('btn-end').onclick = async () => {
   }
 };
 
+$('btn-reset').onclick = async () => {
+  if (!selectedSession) return;
+  if (!confirm(`Reset session "${selectedSession}"? Its transcript will be deleted (generated notes are kept).`)) {
+    return;
+  }
+  try {
+    await api(
+      `/api/live/sessions/${encodeURIComponent(selectedSession)}/reset`,
+      { method: 'POST' }
+    );
+    toast(`Session "${selectedSession}" reset.`, true);
+    selectedSession = null;
+    $('session-detail').hidden = true;
+    $('session-placeholder').hidden = false;
+    await loadSessions();
+  } catch (err) {
+    toast(err.message);
+  }
+};
+
 /* ── Notes ──────────────────────────────────────────────── */
 
 async function loadNotes() {
@@ -118,21 +151,50 @@ async function loadNotes() {
     meta.className = 'meta';
     meta.textContent = new Date(n.mtime).toLocaleString();
     li.append(name, meta);
-    li.onclick = async () => {
-      selectedNote = n.name;
-      try {
-        const text = await api(`/api/notes/${encodeURIComponent(n.name)}`);
-        const view = $('note-view');
-        view.hidden = false;
-        view.textContent = text;
-        loadNotes();
-      } catch (err) {
-        toast(err.message);
-      }
-    };
+    li.onclick = () => openNote(n.name);
     return li;
   });
 }
+
+async function openNote(name) {
+  selectedNote = name;
+  try {
+    const text = await api(`/api/notes/${encodeURIComponent(name)}`);
+    const view = $('note-view');
+    view.hidden = false;
+    view.textContent = text;
+    $('note-placeholder').hidden = true;
+    $('note-actions').hidden = false;
+    loadNotes();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+$('btn-translate').onclick = async () => {
+  if (!selectedNote) return;
+  const btn = $('btn-translate');
+  btn.disabled = true;
+  btn.textContent = 'Đang dịch…';
+  try {
+    const r = await api(
+      `/api/notes/${encodeURIComponent(selectedNote)}/translate`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ language: 'vi' }),
+      }
+    );
+    toast(`Đã dịch: ${r.noteName}`, true);
+    await openNote(r.noteName);
+    await loadStatus();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Dịch sang tiếng Việt 🇻🇳';
+  }
+};
 
 /* ── Manual ingest ──────────────────────────────────────── */
 
@@ -273,6 +335,7 @@ $('btn-capture-start').onclick = async () => {
         device: $('capture-device').value || undefined,
         model: $('capture-model').value,
         language: $('capture-lang').value.trim() || 'auto',
+        speaker: $('capture-speaker').value.trim() || undefined,
       }),
     });
     toast('Capture started. First start downloads the Whisper model — watch the status line.', true);

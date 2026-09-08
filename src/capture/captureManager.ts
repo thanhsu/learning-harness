@@ -24,6 +24,8 @@ export interface CaptureStartOptions {
   device?: string;
   model?: string;
   language?: string;
+  /** Label attached to every chunk (Whisper cannot tell speakers apart). */
+  speaker?: string;
 }
 
 export const CAPTURE_MODELS = ['tiny', 'base', 'small', 'medium'];
@@ -261,6 +263,7 @@ export class CaptureManager {
     if (opts.language && opts.language !== 'auto') {
       args.push('--language', opts.language);
     }
+    if (opts.speaker?.trim()) args.push('--speaker', opts.speaker.trim());
 
     this.events = [];
     this.sessionId = opts.sessionId;

@@ -8,7 +8,13 @@
 </head>
 <body>
   <header>
-    <h1>learning-harness</h1>
+    <div class="brand">
+      <h1>learning-harness</h1>
+      <nav class="tabs">
+        <button class="tab active" data-tab="live">Live</button>
+        <button class="tab" data-tab="notes">Notes vault</button>
+      </nav>
+    </div>
     <div id="status" class="pills">
       <span class="pill" id="pill-ai">AI: …</span>
       <span class="pill" id="pill-quota">Quota: …</span>
@@ -18,8 +24,9 @@
 
   <div id="toast" hidden></div>
 
-  <main>
-    <section class="col">
+  <!-- ── LIVE TAB ─────────────────────────────────────────── -->
+  <main id="tab-live" class="tab-page">
+    <section class="col side">
       <h2>Live capture — Zoom audio 🎙</h2>
       <div id="capture-panel" class="box capture">
         <div id="capture-status-line" class="muted">Checking capture bridge…</div>
@@ -40,6 +47,9 @@
             <input id="capture-lang" type="text" placeholder="lang: auto" size="8" title='language, e.g. "vi", "en", or auto' />
           </div>
           <div class="row">
+            <input id="capture-speaker" type="text" placeholder="speaker label (optional)" title="Name attached to every chunk, e.g. the lecturer" />
+          </div>
+          <div class="row">
             <select id="capture-device" title="audio device"><option value="">Auto device (system audio)</option></select>
             <button id="btn-capture-devices" type="button" title="Refresh device list">↻</button>
           </div>
@@ -54,17 +64,31 @@
 
       <h2>Live sessions</h2>
       <ul id="session-list" class="list"><li class="muted">No active sessions.</li></ul>
+    </section>
 
+    <section class="col grow">
       <div id="session-detail" hidden>
-        <h3 id="session-title"></h3>
-        <div class="session-actions">
-          <button id="btn-end">End session &amp; generate note</button>
+        <div class="detail-head">
+          <h3 id="session-title"></h3>
+          <div class="session-actions">
+            <button id="btn-end">End session &amp; generate note</button>
+            <button id="btn-reset" class="danger" title="Delete this session's transcript and free the id">Reset</button>
+          </div>
         </div>
         <h4>Rolling summary</h4>
         <div id="session-summary" class="box md">–</div>
         <h4>Live transcript</h4>
-        <pre id="session-transcript" class="box"></pre>
+        <pre id="session-transcript" class="box tall"></pre>
       </div>
+      <div id="session-placeholder" class="muted placeholder">Select a session to see its live transcript and rolling summary.</div>
+    </section>
+  </main>
+
+  <!-- ── NOTES TAB ────────────────────────────────────────── -->
+  <main id="tab-notes" class="tab-page" hidden>
+    <section class="col side">
+      <h2>Notes vault</h2>
+      <ul id="note-list" class="list"><li class="muted">No notes yet.</li></ul>
 
       <h2>Paste a transcript</h2>
       <form id="ingest-form">
@@ -74,10 +98,12 @@
       </form>
     </section>
 
-    <section class="col">
-      <h2>Notes vault</h2>
-      <ul id="note-list" class="list"><li class="muted">No notes yet.</li></ul>
-      <pre id="note-view" class="box" hidden></pre>
+    <section class="col grow">
+      <div id="note-actions" hidden>
+        <button id="btn-translate">Dịch sang tiếng Việt 🇻🇳</button>
+      </div>
+      <pre id="note-view" class="box tall" hidden></pre>
+      <div id="note-placeholder" class="muted placeholder">Select a note to read it.</div>
     </section>
   </main>
 

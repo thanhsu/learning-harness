@@ -19,6 +19,7 @@ import {
 } from './live/liveSessionStore.js';
 import { generateNote } from './notes/generateNote.js';
 import { rollingSummaryPrompt } from './notes/prompts.js';
+import { translateNote } from './notes/translate.js';
 import { parseTranscript } from './parsers/index.js';
 import { QuotaExceededError, QuotaGuard } from './quotaGuard.js';
 import { startWatcher } from './watcher/watchTranscripts.js';
@@ -36,7 +37,10 @@ export function createApp(cfg: Config, db: Db) {
     summaryEveryChunks: cfg.summaryEveryChunks,
     summaryEveryMinutes: cfg.summaryEveryMinutes,
     summarize: gemini
-      ? (newText, prev) => gemini.generate(rollingSummaryPrompt(prev, newText))
+      ? (newText, prev) =>
+          gemini.generate(
+            rollingSummaryPrompt(prev, newText, cfg.outputLanguage || undefined)
+          )
       : undefined,
   });
 
@@ -53,6 +57,7 @@ export function createApp(cfg: Config, db: Db) {
       vaultDir: cfg.vaultDir,
       ai: gemini,
       transcriptRef: transcriptPath,
+      outputLanguage: cfg.outputLanguage || undefined,
     });
 
     const info = store.get(sessionId);
@@ -95,6 +100,7 @@ export function createApp(cfg: Config, db: Db) {
       titleHint,
       vaultDir: cfg.vaultDir,
       ai: gemini,
+      outputLanguage: cfg.outputLanguage || undefined,
     });
 
     db.prepare(
@@ -162,6 +168,42 @@ export function createApp(cfg: Config, db: Db) {
     res.type('text/markdown').send(fs.readFileSync(notePath, 'utf8'));
   });
 
+  // Translates an existing note (default: Vietnamese) into <name>.<lang>.md.
+  app.post('/api/notes/:name/translate', async (req, res, next) => {
+    try {
+      const name = req.params.name;
+      if (!NOTE_NAME_RE.test(name) || name.includes('..')) {
+        res.status(400).json({ error: 'Invalid note name.' });
+        return;
+      }
+      if (!fs.existsSync(path.join(cfg.vaultDir, name))) {
+        res.status(404).json({ error: 'Note not found.' });
+        return;
+      }
+      if (!gemini) {
+        res.status(503).json({
+          error:
+            'Translation needs AI. Set GEMINI_API_KEY in .env to enable it.',
+          code: 'AI_UNAVAILABLE',
+        });
+        return;
+      }
+      const language =
+        typeof req.body?.language === 'string' && req.body.language.trim()
+          ? req.body.language.trim()
+          : 'vi';
+      const result = await translateNote({
+        vaultDir: cfg.vaultDir,
+        name,
+        language,
+        ai: gemini,
+      });
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Manual paste/upload from the dashboard.
   app.post('/api/ingest', async (req, res, next) => {
     try {
@@ -185,6 +227,7 @@ export function createApp(cfg: Config, db: Db) {
         titleHint: name.replace(/\.[^.]+$/, ''),
         vaultDir: cfg.vaultDir,
         ai: gemini,
+        outputLanguage: cfg.outputLanguage || undefined,
       });
       res.json({
         ok: true,

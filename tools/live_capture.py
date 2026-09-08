@@ -88,8 +88,11 @@ def pick_mic(sc, spec):
     return sc.default_microphone()
 
 
-def post_chunk(server, session, text):
-    body = json.dumps({"sessionId": session, "text": text}).encode("utf-8")
+def post_chunk(server, session, text, speaker=""):
+    payload = {"sessionId": session, "text": text}
+    if speaker:
+        payload["speaker"] = speaker
+    body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         server.rstrip("/") + "/api/live/chunk",
         data=body,
@@ -134,7 +137,7 @@ def run(args):
             if len(text) < 2:
                 continue
             try:
-                resp = post_chunk(args.server, args.session, text)
+                resp = post_chunk(args.server, args.session, text, args.speaker)
                 emit(
                     "chunk",
                     text=text,
@@ -152,6 +155,11 @@ def main():
     p.add_argument("--device", default="", help="device index or name substring")
     p.add_argument("--model", default="base", help="tiny/base/small/medium")
     p.add_argument("--session", default="zoom-live")
+    p.add_argument(
+        "--speaker",
+        default="",
+        help="label attached to every chunk (e.g. the lecturer's name)",
+    )
     p.add_argument("--server", default="http://localhost:3456")
     p.add_argument("--language", default="auto", help='e.g. "vi", "en", or "auto"')
     p.add_argument("--window", type=float, default=8.0, help="seconds per chunk")

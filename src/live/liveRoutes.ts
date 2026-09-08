@@ -40,6 +40,20 @@ export function createLiveRouter(deps: LiveRouterDeps): Router {
     res.json({ session, transcript: deps.store.readTranscript(req.params.id) });
   });
 
+  // Clears a session (memory + transcript file) so the id can be reused.
+  router.post('/api/live/sessions/:id/reset', (req, res, next) => {
+    try {
+      if (!deps.store.get(req.params.id)) {
+        res.status(404).json({ error: `Unknown session "${req.params.id}".` });
+        return;
+      }
+      deps.store.reset(req.params.id);
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Ends the session and generates the final note in the vault.
   router.post('/api/live/sessions/:id/end', async (req, res, next) => {
     try {

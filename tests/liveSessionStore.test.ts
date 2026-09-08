@@ -121,6 +121,22 @@ describe('LiveSessionStore', () => {
     ]);
   });
 
+  it('reset deletes the transcript and frees the id for reuse', async () => {
+    await store.appendChunk({ sessionId: 's1', text: 'hello' });
+    store.end('s1');
+    const file = path.join(dir, 's1.txt');
+    expect(fs.existsSync(file)).toBe(true);
+
+    store.reset('s1');
+    expect(fs.existsSync(file)).toBe(false);
+    expect(store.get('s1')).toBeUndefined();
+
+    // The id is reusable after reset, even though it was ended before.
+    const { session } = await store.appendChunk({ sessionId: 's1', text: 'again' });
+    expect(session.chunkCount).toBe(1);
+    expect(store.readTranscript('s1')).toContain('again');
+  });
+
   it('lists sessions newest first', async () => {
     let t = 0;
     const clockStore = new LiveSessionStore({
