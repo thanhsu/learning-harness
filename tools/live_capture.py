@@ -12,11 +12,21 @@ sent to localhost.
 
 import argparse
 import json
+import os
 import sys
 import urllib.request
 
 SILENCE_RMS = 0.0010
 SAMPLE_RATE = 16000
+
+# Speaker-embedding model for --diarize (downloaded on first use, ~28 MB).
+EMBEDDING_MODEL_URL = (
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+    "speaker-recongition-models/wespeaker_en_voxceleb_CAM++.onnx"
+)
+EMBEDDING_MODEL_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "models", "speaker-embedding.onnx"
+)
 
 
 def emit(event, **kw):
@@ -64,6 +74,74 @@ def check():
     except Exception as e:
         fail("faster-whisper is not installed (%s)." % e)
     emit("ready")
+
+
+class Diarizer:
+    """Per-utterance speaker labeling: computes a voice embedding for each
+    utterance and clusters online — a familiar voice keeps its label, a new
+    voice becomes "Speaker N". Whisper itself cannot tell speakers apart."""
+
+    def __init__(self, np, threshold=0.52, max_speakers=6):
+        import sherpa_onnx
+
+        if not os.path.exists(EMBEDDING_MODEL_PATH):
+            os.makedirs(os.path.dirname(EMBEDDING_MODEL_PATH), exist_ok=True)
+            emit("status", message="Downloading speaker model (~28 MB, one time)...")
+            urllib.request.urlretrieve(EMBEDDING_MODEL_URL, EMBEDDING_MODEL_PATH)
+
+        self.np = np
+        self.threshold = threshold
+        self.max_speakers = max_speakers
+        self.extractor = sherpa_onnx.SpeakerEmbeddingExtractor(
+            sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+                model=EMBEDDING_MODEL_PATH, num_threads=2
+            )
+        )
+        self.manager = sherpa_onnx.SpeakerEmbeddingManager(self.extractor.dim)
+        self.centroids = {}  # name -> (sum_vector, count)
+        self.last_label = ""
+
+    def _embed(self, audio):
+        stream = self.extractor.create_stream()
+        stream.accept_waveform(SAMPLE_RATE, audio)
+        stream.input_finished()
+        if not self.extractor.is_ready(stream):
+            return None
+        e = self.np.asarray(self.extractor.compute(stream), dtype="float32")
+        norm = float(self.np.linalg.norm(e))
+        return e / norm if norm > 0 else None
+
+    def _update_centroid(self, name, embedding):
+        # Running mean voiceprint per speaker: more utterances = more stable.
+        total, count = self.centroids.get(name, (0.0, 0))
+        total = embedding if count == 0 else total + embedding
+        self.centroids[name] = (total, count + 1)
+        centroid = total / float(self.np.linalg.norm(total))
+        self.manager.remove(name)
+        self.manager.add(name, centroid.tolist())
+
+    def label(self, audio):
+        # Too little speech for a reliable voiceprint: stick with the last voice.
+        if len(audio) < SAMPLE_RATE:
+            return self.last_label
+        embedding = self._embed(audio)
+        if embedding is None:
+            return self.last_label
+
+        name = self.manager.search(embedding.tolist(), threshold=self.threshold)
+        if not name:
+            if self.manager.num_speakers < self.max_speakers:
+                name = "Speaker %d" % (self.manager.num_speakers + 1)
+                self.manager.add(name, embedding.tolist())
+            else:
+                # At capacity: take the closest known voice.
+                name = (
+                    self.manager.search(embedding.tolist(), threshold=0.0)
+                    or self.last_label
+                )
+        self._update_centroid(name, embedding)
+        self.last_label = name
+        return name
 
 
 def pick_mic(sc, spec):
@@ -116,22 +194,42 @@ def run(args):
     )
     model = WhisperModel(args.model, device="auto", compute_type="int8")
 
+    diarizer = None
+    if args.diarize:
+        try:
+            diarizer = Diarizer(
+                np,
+                threshold=args.speaker_threshold,
+                max_speakers=args.max_speakers,
+            )
+            emit("status", message="Speaker identification enabled.")
+        except Exception as e:
+            emit("error", message="Diarization unavailable (%s); continuing without it." % e)
+
     mic = pick_mic(sc, args.device)
     emit("status", message="Capturing from: %s" % mic.name)
     language = None if args.language in (None, "", "auto") else args.language
 
-    def transcribe_and_post(audio):
+    def transcribe_and_post(audio, speech_audio):
         segments, _info = model.transcribe(
             audio, language=language, vad_filter=True, beam_size=1
         )
         text = " ".join(s.text.strip() for s in segments).strip()
         if len(text) < 2:
             return
+        speaker = args.speaker
+        if diarizer is not None:
+            try:
+                # Voiceprint from speech-only frames (silence skews embeddings).
+                speaker = diarizer.label(speech_audio) or args.speaker
+            except Exception as e:
+                emit("error", message="Speaker labeling failed: %s" % e)
         try:
-            resp = post_chunk(args.server, args.session, text, args.speaker)
+            resp = post_chunk(args.server, args.session, text, speaker)
             emit(
                 "chunk",
                 text=text,
+                speaker=speaker or None,
                 chunkCount=(resp.get("session") or {}).get("chunkCount"),
                 summaryUpdated=resp.get("summaryUpdated", False),
             )
@@ -149,8 +247,8 @@ def run(args):
     max_frames = int(SAMPLE_RATE * max(args.window, 3.0))
 
     buffer = []
+    speech_blocks = []
     buffered = 0
-    speech_frames = 0
     silence_run = 0.0
 
     with mic.recorder(samplerate=SAMPLE_RATE, channels=1) as rec:
@@ -164,8 +262,8 @@ def run(args):
 
             if is_speech:
                 buffer.append(mono)
+                speech_blocks.append(mono)
                 buffered += len(mono)
-                speech_frames += len(mono)
                 silence_run = 0.0
             elif buffer:
                 # Keep a little trailing silence for natural word endings.
@@ -179,11 +277,12 @@ def run(args):
                 continue
 
             audio = np.concatenate(buffer)
-            buffer, buffered, silence_run = [], 0, 0.0
-            has_speech = speech_frames >= int(SAMPLE_RATE * MIN_SPEECH)
-            speech_frames = 0
-            if has_speech:
-                transcribe_and_post(audio)
+            speech_audio = (
+                np.concatenate(speech_blocks) if speech_blocks else audio[:0]
+            )
+            buffer, speech_blocks, buffered, silence_run = [], [], 0, 0.0
+            if len(speech_audio) >= int(SAMPLE_RATE * MIN_SPEECH):
+                transcribe_and_post(audio, speech_audio)
 
 
 def main():
@@ -197,6 +296,18 @@ def main():
         "--speaker",
         default="",
         help="label attached to every chunk (e.g. the lecturer's name)",
+    )
+    p.add_argument(
+        "--diarize",
+        action="store_true",
+        help="identify different voices and label chunks Speaker 1/2/... (experimental)",
+    )
+    p.add_argument("--max-speakers", type=int, default=6)
+    p.add_argument(
+        "--speaker-threshold",
+        type=float,
+        default=0.52,
+        help="voice-match threshold: lower merges voices, higher splits them",
     )
     p.add_argument("--server", default="http://localhost:3456")
     p.add_argument("--language", default="auto", help='e.g. "vi", "en", or "auto"')

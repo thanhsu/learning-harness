@@ -28,6 +28,8 @@ export interface CaptureStartOptions {
   speaker?: string;
   /** Seconds of audio per transcription window (smaller = lower latency). */
   windowSeconds?: number;
+  /** Identify different voices and label chunks Speaker 1/2/... (experimental). */
+  diarize?: boolean;
 }
 
 export const CAPTURE_MODELS = ['tiny', 'base', 'small', 'medium'];
@@ -270,6 +272,7 @@ export class CaptureManager {
     if (Number.isFinite(window) && window >= 3 && window <= 30) {
       args.push('--window', String(window));
     }
+    if (opts.diarize) args.push('--diarize');
 
     this.events = [];
     this.sessionId = opts.sessionId;

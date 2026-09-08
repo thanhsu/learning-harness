@@ -53,6 +53,25 @@ bridge's venv) — double-click `scripts/install-mac.command`. See
 5. After class, press **■ Stop capture**, open the session, and click
    **End session & generate note**.
 
+## Speaker identification (experimental)
+
+Tick **👥 Identify speakers** in the capture panel and each utterance is
+labeled `Speaker 1`, `Speaker 2`, … — a voiceprint (28 MB ONNX model,
+downloaded on first use, runs locally via sherpa-onnx) is computed per
+utterance and clustered online, with per-speaker centroids that stabilize as
+the session goes on.
+
+Notes and limits:
+
+- Works best when voices are distinct and audio is clean; very similar voices
+  can occasionally merge or split. Whisper alone cannot tell speakers apart —
+  this adds that on top.
+- Chunks are split at pauses, so an utterance containing two people talking
+  over each other gets a single label.
+- Tune with `--speaker-threshold` (default 0.52): lower merges voices, higher
+  splits them; `--max-speakers` caps the count (default 6).
+- When identification is ON, the fixed "speaker label" field is ignored.
+
 ## CLI (without the UI)
 
 ```bash

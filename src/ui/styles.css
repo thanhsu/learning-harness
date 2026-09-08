@@ -152,6 +152,8 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; resize: 
 .capture select { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 8px; font: inherit; max-width: 100%; }
 .capture #capture-device { flex: 1; min-width: 0; }
 .small { font-size: 12px; }
+.check { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.check input { accent-color: var(--accent); }
 .muted { color: var(--muted); }
 button.danger { background: #e05f5f; color: #1a0808; }
 

@@ -499,6 +499,7 @@ $('btn-capture-start').onclick = async () => {
         language: $('capture-lang').value.trim() || 'auto',
         speaker: $('capture-speaker').value.trim() || undefined,
         windowSeconds: Number($('capture-window').value) || undefined,
+        diarize: $('capture-diarize').checked,
       }),
     });
     toast('Capture started. First start downloads the Whisper model — watch the status line.', true);

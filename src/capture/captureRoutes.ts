@@ -37,7 +37,7 @@ export function createCaptureRouter(manager: CaptureManager): Router {
   });
 
   router.post('/api/capture/start', (req, res) => {
-    const { sessionId, device, model, language, speaker, windowSeconds } =
+    const { sessionId, device, model, language, speaker, windowSeconds, diarize } =
       req.body ?? {};
     const r = manager.start({
       sessionId: typeof sessionId === 'string' && sessionId.trim() ? sessionId.trim() : 'zoom-live',
@@ -46,6 +46,7 @@ export function createCaptureRouter(manager: CaptureManager): Router {
       language: typeof language === 'string' ? language.trim() : undefined,
       speaker: typeof speaker === 'string' ? speaker : undefined,
       windowSeconds: Number(windowSeconds) || undefined,
+      diarize: diarize === true,
     });
     if (!r.started) {
       res.status(400).json({ error: r.error });

@@ -20,8 +20,14 @@ pipeline still works offline in fallback mode with no key at all.
   maintains a rolling summary every N chunks / N minutes.
 - **Live capture** — optional built-in bridge (Python + local faster-whisper)
   that turns Zoom/system audio into live chunks automatically, installed and
-  controlled from the dashboard. Works on Windows (WASAPI loopback, no extra
-  tools) and macOS (via BlackHole). See [docs/live-capture.md](docs/live-capture.md).
+  controlled from the dashboard. Utterances end at natural pauses (complete
+  sentences, low latency), with optional experimental speaker identification
+  (Speaker 1/2/…). Works on Windows (WASAPI loopback, no extra tools) and
+  macOS (via BlackHole). See [docs/live-capture.md](docs/live-capture.md).
+- **Settings in the dashboard** — update the Gemini API key, models (separate
+  note vs rolling-summary model), daily-call cap and output language from the
+  UI; persisted to `.env`, applied without a restart. AI failures (Google
+  free-tier 429s, bad keys) show as a clear banner.
 - **Web dashboard** at `http://localhost:3456` — active sessions, live
   transcript, rolling summary, generated notes, and manual paste/upload.
 - **Markdown vault** (default `~/LearningVault`) — plain files, ready for
