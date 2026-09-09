@@ -64,6 +64,8 @@ main.tab-page {
   gap: 24px;
   padding: 12px 20px 40px;
 }
+/* Author display rules override the UA's [hidden] — restore it explicitly. */
+main.tab-page[hidden] { display: none; }
 @media (max-width: 900px) { main.tab-page { grid-template-columns: 1fr; } }
 
 .caption {
